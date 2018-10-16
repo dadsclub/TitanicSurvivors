@@ -24,17 +24,6 @@ train$Age <- replace_na(train$Age, median(na.omit(train$Age)))
 train$Survived = as.logical(train$Survived)
 
 
-# Stacked Bar Chart of Survival by Gender
-ggplot(data = train) +
-  geom_bar(mapping = aes(x=Sex, fill=factor(Survived)),
-           main="Survival Based on Sex",
-           xlab="Sex")
-
-# Boxplot of Fare Split by Survival
-ggplot(data = train) +
-  geom_boxplot(mapping = aes(x=factor(Survived), y=Fare))
-
-
 # Creating Age Categories
 AgeBreaks = c(0, 1, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80)
 AgeLabels = c("0-1","2-4", "5-9", "10-14", "15-19", "20-24", "25-29", "30-34", "35-39", "40-44",
@@ -47,6 +36,20 @@ setDT(train)[, AgeGroups := cut(x=Age, breaks=AgeBreaks, right=TRUE, labels=AgeL
 remove(AgeBreaks)
 remove(AgeLabels)
 
+
+
+
+
+
+# Stacked Bar Chart of Survival by Gender
+ggplot(data = train) +
+  geom_bar(mapping = aes(x=Sex, fill=factor(Survived)),
+           main="Survival Based on Sex",
+           xlab="Sex")
+
+# Boxplot of Fare Split by Survival
+ggplot(data = train) +
+  geom_boxplot(mapping = aes(x=factor(Survived), y=Fare))
 
 # Stacked Bar Graph of Survival based on Age Group
 ggplot(data = train) +
