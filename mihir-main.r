@@ -43,15 +43,31 @@ remove(AgeLabels)
 
 # Stacked Bar Chart of Survival by Gender
 ggplot(data = train) +
-  geom_bar(mapping = aes(x=Sex, fill=factor(Survived)),
-           main="Survival Based on Sex",
-           xlab="Sex")
-
+  geom_bar(mapping = aes(x=Sex, fill=factor(Survived))) +
+  labs(title="Survivorship Based on Gender",
+       x="Sex",
+       y="Number of People")
+             
 # Boxplot of Fare Split by Survival
 ggplot(data = train) +
-  geom_boxplot(mapping = aes(x=factor(Survived), y=Fare))
+  geom_boxplot(mapping = aes(x=factor(Survived), y=Fare)) +
+  labs(title="Fare Distribution Based on Survival",
+       x="Survivorship",
+       y="Fare")
 
 # Stacked Bar Graph of Survival based on Age Group
 ggplot(data = train) +
   geom_bar(mapping = aes(x=AgeGroups, fill=Survived)) +
-  ggtitle("Survival Based on Age Group")
+  labs(title="Survival Based on Age Group",
+       x="Age Groups",
+       y="Number of People")
+
+# Stacked Bar Graph of Survival based on Age Group, Faceted by Gender
+ggplot(data = train) +
+  geom_bar(mapping = aes(x=AgeGroups, fill=Survived)) +
+  coord_flip() +
+  facet_wrap(~Sex) +
+  labs(title="Survival Based on Age Group and Faceted by Gender",
+       y="Number of People",
+       x="Age Groups")
+
