@@ -1,40 +1,114 @@
-setwd("~/Titanic")
 library(tidyverse)
-library(data.table)
+library(caret)
 
 
-# train Import -------------------------------------------------------------
-
-train <- read.csv("train.csv")
-train$Age %>%  head(10)
-
-train$Survived %>% sum() #Number of survivors 
-nrow(train) - (train$Survived %>% sum()) #Number of unlucky bastards
+set.seed(420)
+train <- read.csv("train.csv", stringsAsFactors=FALSE)
+test  <- read.csv("test.csv",  stringsAsFactors=FALSE)
 
 
-# Handling NA's -----------------------------------------------------------
-#There are some missing values for Age. We will do a dirty train replacement by replacing those values with the median Age
-train$Age %>% na.omit() %>%  median() # NA's are like an STD one NA in an entire vector will result in all the values being NA
-train$Age <- train$Age %>% replace_na(28)
-
-# Wrangling ---------------------------------------------------------------
-#train <- train %>% filter(Age <= 110) #some 400 year old on this boat. 
-
-#Creating age categories
-Agebreaks <- c(0,1,5,10,15,20,25,30,35,40,45,50,55,60,65,70,75,80,85,500)
-Agelabels <- c("0-1","1-4","5-9","10-14","15-19","20-24","25-29","30-34",
-               "35-39","40-44","45-49","50-54","55-59","60-64","65-69",
-               "70-74","75-79","80-84","85+")
-
-setDT(train)[ , Agegroups := cut(Age, 
-                                breaks = Agebreaks, 
-                                right = FALSE, 
-                                labels = Agelabels)]
-remove(Agebreaks)
-remove(Agelabels)
 # EDA ---------------------------------------------------------------------
+ggplot(train, aes(Age, fill = factor(Survived))) + 
+  geom_histogram(bins=30) + 
+  xlab("Age") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Age vs Survived")
 
-train %>% filter(Survived == 1) %>% ggplot() + geom_bar(aes(Agegroups)) + ggtitle("Age of Survivors") # Survivors by Age
-train %>% filter(Survived == 0) %>% ggplot() + geom_bar(aes(Agegroups)) + ggtitle("Age of Victims") # Victims by Age
-train %>% ggplot(aes(Embarked, Pclass, fill = Survived, alpha=Survived)) + geom_tile() #Embarked and Pclass on survivorship
+ggplot(train, aes(Sex, fill = factor(Survived))) + 
+  geom_bar(stat = "count", position = 'dodge')+
+  xlab("Sex") +
+  ylab("Count") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Sex vs Survived")
+
+ggplot(train, aes(Age, fill = factor(Survived))) + 
+  geom_histogram(bins=30) + 
+  xlab("Age") +
+  ylab("Count") +
+  facet_grid(.~Sex)+
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Age vs Sex vs Survived")
+
+ggplot(train, aes(Pclass, fill = factor(Survived))) + 
+  geom_bar(stat = "count")+
+  xlab("Pclass") +
+  facet_grid(.~Sex)+
+  ylab("Count") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Pclass vs Sex vs Survived")
+
+ggplot(train, aes(x = Age, y = Sex)) + 
+  geom_jitter(aes(colour = factor(Survived))) + 
+  facet_wrap(~Pclass) + 
+  labs(x = "Age", y = "Sex", title = "Pclass vs Sex vs Age vs Survived")+
+  scale_fill_discrete(name = "Survived") + 
+  scale_x_continuous(name="Age",limits=c(0, 81))
+
+ggplot(train, aes(x = Fare, y = Pclass)) + 
+  geom_jitter(aes(colour = factor(Survived))) + 
+  labs(x = "Age", y = "Pclass", title = "Fare vs Pclass")+
+  scale_fill_discrete(name = "Survived") + 
+  scale_x_continuous(name="Fare", limits=c(0, 270), breaks=c(0, 40, 80, 120, 160, 200, 240, 280))
+
+ggplot(train, aes(Pclass, fill = factor(Survived))) + 
+  geom_bar(stat = "count")+
+  xlab("Pclass") +
+  ylab("Count") +
+  facet_wrap(~Embarked) + 
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Embarked vs Pclass vs Survived")
+
+
+# Function for Wrangling Data ---------------------------------------------
+features <- c("Pclass",
+              "Age",
+              "Sex",
+              "Parch",
+              "SibSp",
+              "Fare",
+              "Embarked",
+              "Survived")
+extractfeatures <- function(data) {
+  fea <- data[,features]
+  fea$Age[is.na(fea$Age)] <- 28
+  fea$Fare[is.na(fea$Fare)] <- median(fea$Fare, na.rm=TRUE)
+  fea$Embarked[fea$Embarked==""] = "S"
+  fea$Sex      <- as.factor(fea$Sex)
+  fea$Embarked <- as.factor(fea$Embarked)
+  fea$Survived <- as.factor(fea$Survived)
+  return(fea)
+}
+features2 <- c("Pclass",
+              "Age",
+              "Sex",
+              "Parch",
+              "SibSp",
+              "Fare",
+              "Embarked")
+extractfeatures2 <- function(data) {
+  fea <- data[,features2]
+  fea$Age[is.na(fea$Age)] <- 28
+  fea$Fare[is.na(fea$Fare)] <- median(fea$Fare, na.rm=TRUE)
+  fea$Embarked[fea$Embarked==""] = "S"
+  fea$Sex      <- as.factor(fea$Sex)
+  fea$Embarked <- as.factor(fea$Embarked)
+  return(fea)
+}
+
+
+# Building Model ----------------------------------------------------------
+
+rf <- train(Survived ~ ., data = extractfeatures(train), method = "rf", ntree=1000)
+#rf <- randomForest(extractfeatures(train), as.factor(train$Survived), ntree=100, importance=TRUE)
+
+predictions <- data.frame(PassengerId = test$PassengerId)
+predictions$Survived <- predict(rf, extractfeatures2(test))
+
+
+# Attaining Accuracy ------------------------------------------------------
+
+key <- read_csv("gender_submission.csv")
+key$pred <- predictions$Survived
+key$answer <- as.factor(case_when(key$Survived == key$pred ~ "Right",key$Survived != key$pred ~ "Wrong"))
+summary(key$answer)
 
