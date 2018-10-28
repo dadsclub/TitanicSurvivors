@@ -1,0 +1,184 @@
+---
+title: "Titanic Survivors"
+author: "DADS Club at Florida Polytechnic University"
+date: "October 28, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(caret)
+
+
+set.seed(420)
+train <- read.csv("train.csv", stringsAsFactors=FALSE)
+test  <- read.csv("test.csv",  stringsAsFactors=FALSE)
+
+```
+
+# Introduction
+The purpose of this project was to predict who would have survived the Titanic. Input data included:
+```{r Display Columns, echo=FALSE}
+colnames(train)
+```
+with Survived being the target variable.
+
+#### Summary of Variables
+**Survivel** : 1 for survivors 0 for victims. Factor  
+**PassengerId** : Random ID number associated with a unique passenger  
+**Pclass** : Ticket class (1, 2, 3)  
+**Sex** : male or female  
+**Parch** : Number of parents aboard   
+**Age** : Age in years  
+**Ticket** : Ticket number  
+**Fare** : Fare for a passenger (assume it is in dollars)  
+**Cabin** : The cabin number of the passenger  
+**Embarked** : Port of embarkation (C = Cherbourg, Q = Queenstown, S = Southampton)
+
+# Visualizations
+```{r Visualizations, echo=FALSE, warning=FALSE}
+ggplot(train, aes(Age, fill = factor(Survived))) + 
+  geom_histogram(bins=30) + 
+  xlab("Age") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Age vs Survived")
+
+ggplot(train, aes(Sex, fill = factor(Survived))) + 
+  geom_bar(stat = "count", position = 'dodge')+
+  xlab("Sex") +
+  ylab("Count") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Sex vs Survived")
+
+ggplot(train, aes(Age, fill = factor(Survived))) + 
+  geom_histogram(bins=30) + 
+  xlab("Age") +
+  ylab("Count") +
+  facet_grid(.~Sex)+
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Age vs Sex vs Survived")
+
+ggplot(train, aes(Pclass, fill = factor(Survived))) + 
+  geom_bar(stat = "count")+
+  xlab("Pclass") +
+  facet_grid(.~Sex)+
+  ylab("Count") +
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Pclass vs Sex vs Survived")
+
+ggplot(train, aes(x = Age, y = Sex)) + 
+  geom_jitter(aes(colour = factor(Survived))) + 
+  facet_wrap(~Pclass) + 
+  labs(x = "Age", y = "Sex", title = "Pclass vs Sex vs Age vs Survived")+
+  scale_fill_discrete(name = "Survived") + 
+  scale_x_continuous(name="Age",limits=c(0, 81))
+
+ggplot(train, aes(x = Fare, y = Pclass)) + 
+  geom_jitter(aes(colour = factor(Survived))) + 
+  labs(x = "Age", y = "Pclass", title = "Fare vs Pclass")+
+  scale_fill_discrete(name = "Survived") + 
+  scale_x_continuous(name="Fare", limits=c(0, 270), breaks=c(0, 40, 80, 120, 160, 200, 240, 280))
+
+ggplot(train, aes(Pclass, fill = factor(Survived))) + 
+  geom_bar(stat = "count")+
+  xlab("Pclass") +
+  ylab("Count") +
+  facet_wrap(~Embarked) + 
+  scale_fill_discrete(name = "Survived") + 
+  ggtitle("Embarked vs Pclass vs Survived")
+```
+
+# Feature selection
+We decided to use the following variables in our model.
+
+```{r features, echo=FALSE}
+features <- c("Pclass",
+              "Age",
+              "Sex",
+              "Parch",
+              "SibSp",
+              "Fare", 
+              "Embarked",
+              "Survived")
+print(features)
+```
+We felt that cabin, ticket, and passengerid were all irrelevant.
+
+# Data Wrangling
+We built a set of simple functions for cleaning and wrangling the data. The function performed the following operations.  
+First it extracted the features we deemed relevant. 
+Then it replaced NA values for Age and Fare with the non-Na median for the columns.  
+We observed some of the passengers had no data for embarked so we set those values to the most common embarkment which is 'S'. Sex was tranformed into a factor along with embarked and survived. 
+```{r Data Wrangling Functions}
+wrangler <- function(data) {
+  clean <- data[,features]
+  clean$Age[is.na(clean$Age)] <- 28
+  clean$Fare[is.na(clean$Fare)] <- median(clean$Fare, na.rm=TRUE)
+  clean$Embarked[clean$Embarked==""] = "S"
+  clean$Sex      <- as.factor(clean$Sex)
+  clean$Embarked <- as.factor(clean$Embarked)
+  clean$Survived <- as.factor(clean$Survived)
+  return(clean)
+}
+features2 <- c("Pclass",
+              "Age",
+              "Sex",
+              "Parch",
+              "SibSp",
+              "Fare",
+              "Embarked")
+wrangler2 <- function(data) {
+  clean <- data[,features2]
+  clean$Age[is.na(clean$Age)] <- 28
+  clean$Fare[is.na(clean$Fare)] <- median(clean$Fare, na.rm=TRUE)
+  clean$Embarked[clean$Embarked==""] = "S"
+  clean$Sex      <- as.factor(clean$Sex)
+  clean$Embarked <- as.factor(clean$Embarked)
+  return(clean)
+}
+```
+
+# Building the model
+We decided to use a random forest since a good portion of our input variables were factors. Intuitively we knew that a randomforest was a good model because this dataset was cited in different readings explaining the use of a random forest. Our random forest was trained using the caret package with 1,000 tree's.
+```{r random forest}
+rf <- train(Survived ~ ., data = wrangler(train), method = "rf", ntrees=1000)
+```
+Note that we used the first wrangling function here as it includes the Survived variables
+
+```{r VarImp, echo=FALSE}
+varImp(rf) %>% ggplot() + geom_col() + ggtitle("Feature Importance")
+```
+
+Based on the graph above we can see that Sex, Fare, and Age were the three most important features with embarkment being the least important.
+
+# Testing the model
+We used the model to predict the outcomes for all the passengers in the test dataset. Here we use the second wrangler function and save the results to a data frame that is keyed on PassengerId
+```{r predictions}
+predictions <- data.frame(PassengerId = test$PassengerId)
+predictions$Survived <- predict(rf, wrangler2(test))
+head(predictions)
+```
+
+## Testing accuracy 
+We will then compare those predictions to the answers in the gender_submission.csv file.
+
+```{r evaluation}
+key <- read_csv("gender_submission.csv")
+key$pred <- predictions$Survived
+key$answer <- as.factor(case_when(key$Survived == key$pred ~ "Right",key$Survived != key$pred ~ "Wrong"))
+summary(key$answer)
+
+```
+
+Our model yielded an 88% acuraccy.
+
+# Conclusion
+To summarise, we were able to correctly predict whether or not somebody survived the Titanic based on their gender, price of ticket, age, number of siblings/spouses/parents on board, and where they embarked from with 88% accuracy.
+
+### Contributers
+Angel Sarmiento  
+Mihir Lad  
+Kahlil Wehmeyer  
+
+
